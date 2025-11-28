@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\ActividadRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -11,7 +13,7 @@ use Doctrine\ORM\Mapping as ORM;
 class Actividad
 {
     #[ORM\Id]
-    #[ORM\GeneratedValue] // Auto-incremental
+    #[ORM\GeneratedValue]
     #[ORM\Column]
     private ?int $codActividad = null;
 
@@ -19,7 +21,7 @@ class Actividad
     private ?string $nombre = null;
 
     #[ORM\Column(length: 50)]
-    private ?string $estado = 'ABIERTA'; // Valor por defecto
+    private ?string $estado = 'ABIERTA';
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $descripcion = null;
@@ -30,18 +32,33 @@ class Actividad
     #[ORM\Column(nullable: true)]
     private ?int $maxParticipantes = null;
 
-    // Guardamos los ODS como texto (ej: "Salud, Educación")
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $ods = null;
 
-    // RELACIÓN: Una actividad pertenece a UNA Organización
+    // --- RELACIONES ---
+
+    // Relación N:1 con Organización (Dueña de la actividad)
     #[ORM\ManyToOne(targetEntity: Organizacion::class)]
     #[ORM\JoinColumn(name: 'cif_organizacion', referencedColumnName: 'cif', nullable: false)]
     private ?Organizacion $organizacion = null;
 
-    // ==========================================
-    // GETTERS Y SETTERS
-    // ==========================================
+    // Relación N:M con Voluntarios (Inscripciones)
+    // Esto creará la tabla intermedia 'VOLUNTARIOS_ACTIVIDADES' automáticamente
+    #[ORM\ManyToMany(targetEntity: Voluntario::class)]
+    #[ORM\JoinTable(name: 'VOLUNTARIOS_ACTIVIDADES')]
+    #[ORM\JoinColumn(name: 'cod_actividad', referencedColumnName: 'cod_actividad')]
+    #[ORM\InverseJoinColumn(name: 'dni_voluntario', referencedColumnName: 'dni')]
+    private Collection $voluntariosInscritos;
+
+    // --- CONSTRUCTOR ---
+    
+    public function __construct()
+    {
+        // Inicializamos la lista de voluntarios vacía
+        $this->voluntariosInscritos = new ArrayCollection();
+    }
+
+    // --- GETTERS Y SETTERS ---
 
     public function getCodActividad(): ?int
     {
@@ -122,6 +139,30 @@ class Actividad
     public function setOrganizacion(?Organizacion $organizacion): static
     {
         $this->organizacion = $organizacion;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Voluntario>
+     */
+    public function getVoluntariosInscritos(): Collection
+    {
+        return $this->voluntariosInscritos;
+    }
+
+    public function addVoluntario(Voluntario $voluntario): static
+    {
+        if (!$this->voluntariosInscritos->contains($voluntario)) {
+            $this->voluntariosInscritos->add($voluntario);
+        }
+
+        return $this;
+    }
+
+    public function removeVoluntario(Voluntario $voluntario): static
+    {
+        $this->voluntariosInscritos->removeElement($voluntario);
+
         return $this;
     }
 }

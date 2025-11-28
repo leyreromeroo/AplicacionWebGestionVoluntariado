@@ -1,22 +1,22 @@
 openapi: 3.0.3
 info:
   title: API Plataforma de Voluntariado
-  description: API Backend para la gestión de voluntarios, organizaciones y actividades solidarias. Incluye autenticación y gestión de ODS.
+  description: API Backend para la gestión de voluntarios, organizaciones y actividades solidarias.
   version: 1.0.0
 servers:
-  - url: http://localhost:8080/api
-    description: Servidor Local de Desarrollo
+  - url: http://localhost:8000/api
+    description: Servidor Local Symfony
 
 paths:
-  # -------------------------
-  # AUTENTICACIÓN
-  # -------------------------
+  # ==========================================
+  # AUTENTICACIÓN Y REGISTRO
+  # ==========================================
   /auth/login:
     post:
       tags:
         - Autenticación
       summary: Iniciar sesión
-      description: Verifica credenciales en tablas de Voluntarios y Organizaciones. Devuelve token y rol.
+      description: Login común para Voluntarios y Organizaciones.
       requestBody:
         required: true
         content:
@@ -25,7 +25,7 @@ paths:
               $ref: '#/components/schemas/LoginRequest'
       responses:
         '200':
-          description: Login exitoso
+          description: Login exitoso. Devuelve token y rol.
           content:
             application/json:
               schema:
@@ -38,7 +38,7 @@ paths:
       tags:
         - Autenticación
       summary: Registrar nuevo voluntario
-      description: Crea un registro en la tabla VOLUNTARIOS con contraseña encriptada.
+      description: Crea un voluntario con perfil completo (habilidades, disponibilidad, etc.)
       requestBody:
         required: true
         content:
@@ -48,15 +48,14 @@ paths:
       responses:
         '201':
           description: Voluntario creado correctamente
-        '400':
-          description: Datos inválidos o usuario ya existente
+        '409':
+          description: El DNI o Correo ya existen
 
   /auth/register/organizacion:
     post:
       tags:
         - Autenticación
       summary: Registrar nueva organización
-      description: Crea un registro en la tabla ORGANIZACIONES.
       requestBody:
         required: true
         content:
@@ -66,33 +65,34 @@ paths:
       responses:
         '201':
           description: Organización creada correctamente
+        '409':
+          description: El CIF o Email ya existen
 
-  # -------------------------
+  # ==========================================
   # ACTIVIDADES
-  # -------------------------
+  # ==========================================
   /actividades:
     get:
       tags:
         - Actividades
-      summary: Listar actividades disponibles
-      description: Devuelve todas las actividades con estado abierto.
+      summary: Listar todas las actividades
+      description: Devuelve la lista de actividades disponibles.
       responses:
         '200':
-          description: Lista de actividades
+          description: Lista recuperada con éxito
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/ActividadDetalle'
-    
+
+  /actividades/crear:
     post:
       tags:
         - Actividades
-      summary: Crear una nueva actividad
-      description: Crea la actividad y vincula los ODS seleccionados en la tabla ODS_ACTIVIDAD (Transacción).
-      security:
-        - bearerAuth: []
+      summary: Publicar una nueva actividad
+      description: Una organización crea una actividad.
       requestBody:
         required: true
         content:
@@ -108,13 +108,12 @@ paths:
       tags:
         - Actividades
       summary: Inscribir voluntario en actividad
-      description: Registra al voluntario en la tabla VOLUNTARIOS_ACTIVIDADES si hay aforo.
-      security:
-        - bearerAuth: []
+      description: Apunta a un voluntario a una actividad específica.
       parameters:
         - name: codActividad
           in: path
           required: true
+          description: ID único de la actividad
           schema:
             type: integer
       requestBody:
@@ -122,16 +121,14 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                dni_voluntario:
-                  type: string
-                  example: "12345678X"
+              $ref: '#/components/schemas/InscripcionRequest'
       responses:
         '200':
-          description: Inscripción realizada
+          description: Inscripción realizada con éxito
+        '404':
+          description: Actividad o Voluntario no encontrados
         '409':
-          description: Aforo completo o ya inscrito
+          description: El voluntario ya está inscrito o no hay plazas
 
 components:
   securitySchemes:
@@ -141,48 +138,44 @@ components:
       bearerFormat: JWT
 
   schemas:
-    # --- Schemas de Auth ---
+    # --- MODELOS DE AUTENTICACIÓN ---
     LoginRequest:
       type: object
+      required: [email, password]
       properties:
         email:
           type: string
           format: email
-          example: "juan@gmail.com"
+          example: "usuario@email.com"
         password:
           type: string
           format: password
-          example: "segura123"
-    
+          example: "1234"
+
     LoginResponse:
       type: object
       properties:
         token:
           type: string
-          example: "eyJhbGciOiJIUzI1Ni..."
         rol:
           type: string
-          enum: [VOLUNTARIO, ORGANIZACION]
-          example: "VOLUNTARIO"
-        id_usuario:
+          example: "ROLE_VOLUNTARIO"
+        id:
           type: string
-          description: DNI o CIF según corresponda
-          example: "12345678X"
+          description: "DNI o CIF del usuario logueado"
+          example: "12345678Z"
 
-    # --- Schemas de Registro ---
+    # --- MODELO REGISTRO VOLUNTARIO ---
     VoluntarioRegistro:
       type: object
-      required: [dni, nombre, correo, password]
+      required: [nombreCompleto, dni, correo, password]
       properties:
+        nombreCompleto:
+          type: string
+          example: "Juan Pérez García"
         dni:
           type: string
-          example: "12345678X"
-        nombre:
-          type: string
-          example: "Juan"
-        apellido1:
-          type: string
-          example: "Pérez"
+          example: "12345678Z"
         correo:
           type: string
           format: email
@@ -190,14 +183,45 @@ components:
         password:
           type: string
           format: password
-          example: "miClave123"
         zona:
           type: string
           example: "Pamplona"
-        disponibilidad:
+        ciclo:
           type: string
-          example: "Fines de semana"
+          example: "DAW"
+        fechaNacimiento:
+          type: string
+          format: date
+          example: "1998-05-20"
+        experiencia:
+          type: string
+          example: "Voluntariado previo en Cruz Roja"
+        coche:
+          type: string
+          description: "Puede ser 'Si', 'No', 'true', etc."
+          example: "Si"
+        idiomas:
+          type: array
+          items:
+            type: string
+          example: ["Inglés", "Euskera"]
+        habilidades:
+          type: array
+          items:
+            type: string
+          example: ["Primeros Auxilios", "Conducción"]
+        intereses:
+          type: array
+          items:
+            type: string
+          example: ["Medio Ambiente", "Social"]
+        disponibilidad:
+          type: array
+          items:
+            type: string
+          example: ["Lunes Mañana", "Fines de Semana"]
 
+    # --- MODELO REGISTRO ORGANIZACIÓN ---
     OrganizacionRegistro:
       type: object
       required: [cif, nombre, email, password]
@@ -207,67 +231,75 @@ components:
           example: "G99887766"
         nombre:
           type: string
-          example: "ONG Ayuda Global"
+          example: "Asociación Ayuda Mutua"
         email:
           type: string
           format: email
-          example: "contacto@ong.org"
         password:
           type: string
           format: password
         sector:
           type: string
-          example: "Educación"
+          example: "Salud"
+        zona:
+          type: string
+          example: "Burlada"
         descripcion:
           type: string
+          example: "ONG dedicada a..."
 
-    # --- Schemas de Actividades ---
+    # --- MODELOS DE ACTIVIDADES ---
     ActividadCreacion:
       type: object
-      required: [cif_empresa, nombre, ods_ids]
+      required: [cifOrganizacion, nombre]
       properties:
-        cif_empresa:
+        cifOrganizacion:
           type: string
-          description: CIF de la organización creadora
+          description: "CIF de la organización dueña"
           example: "G99887766"
         nombre:
           type: string
           example: "Recogida de Alimentos"
         descripcion:
           type: string
-          example: "Ayuda en el banco de alimentos..."
-        max_participantes:
-          type: integer
-          example: 20
-        fecha_inicio:
+        fechaInicio:
           type: string
           format: date
-          example: "2023-12-01"
-        ods_ids:
+          example: "2025-12-01"
+        maxParticipantes:
+          type: integer
+          example: 20
+        ods:
           type: array
-          description: IDs de los ODS relacionados (para tabla ODS_ACTIVIDAD)
           items:
-            type: integer
-          example: [1, 2]
+            type: string
+          example: ["Hambre Cero", "Salud"]
 
     ActividadDetalle:
       type: object
       properties:
         codActividad:
           type: integer
-          example: 101
         nombre:
           type: string
-          example: "Recogida de Alimentos"
-        organizacion_nombre:
+        organizacion:
+          type: object
+          properties:
+            nombre:
+              type: string
+            cif:
+              type: string
+        descripcion:
           type: string
-          example: "ONG Ayuda Global"
-        ods_lista:
-          type: array
-          items:
-            type: object
-            properties:
-              num_ods:
-                type: integer
-              nombre:
-                type: string
+        fechaInicio:
+          type: string
+          format: date
+
+    # --- MODELO INSCRIPCIÓN ---
+    InscripcionRequest:
+      type: object
+      required: [dni_voluntario]
+      properties:
+        dni_voluntario:
+          type: string
+          example: "12345678Z"
