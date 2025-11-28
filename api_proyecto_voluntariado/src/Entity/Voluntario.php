@@ -82,6 +82,16 @@ class Voluntario implements UserInterface, PasswordAuthenticatedUserInterface
     // GETTERS Y SETTERS
     // ==========================================
 
+    public function __toString(): string
+    {
+        return $this->nombre . ' ' . ($this->apellido1 ?? '') . ' ' . ($this->apellido2 ?? '');
+    }
+
+    public function getId(): ?string
+    {
+        return $this->dni;
+    }   
+
     public function getDni(): ?string
     {
         return $this->dni;
